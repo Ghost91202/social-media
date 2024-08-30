@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String           @id @default(uuid())
+  username                String           @unique
+  email                   String           @unique
+  passwordHash            String
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  isVerified              Boolean          @default(false)
+  role                    UserRole         @default(USER)
+  profile                 UserProfile?
+  posts                   Post[]
+  Reel                    Reel[]
+  comments                Comment[]
+  likes                   Like[]
+  followers               Follow[]         @relation("UserFollowers")
+  following               Follow[]         @relation("UserFollowing")
+  sentMessages            Message[]        @relation("UserSentMessages")
+  conversationsAsUser1    Conversation[]   @relation("User1Conversations")
+  conversationsAsUser2    Conversation[]   @relation("User2Conversations")
+  media                   Media[]
+  privacy                 Privacy          @default(PUBLIC)
+  notificationsReceived   Notification[]   @relation("UserNotification") // Relation for notifications received
+  notificationsSent       Notification[]   @relation("SenderNotification") // Relation for notifications sent
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum Privacy {
+  PUBLIC
+  PRIVATE
+}
+
+model UserProfile {
+  id             String  @id @default(uuid()) @map("user_id")
+  userId         String  @unique
+  fullName       String?
+  bio            String?
+  profilePicture String?
+  coverPhoto     String?
+  location       String?
+  website        String?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Reel {
+  id     Int    @id @default(autoincrement())
+  title  String
+  userId String
+
+  videoUrl String // URL to the video stored in Cloudinary
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  isPublic  Boolean   @default(true)
+  user      User      @relation(fields: [userId], references: [id])
+  comments  Comment[]
+  likes     Like[]
+}
+
+model Post {
+  id        String    @id @default(uuid())
+  userId    String
+  content   String
+  imageUrl  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  isPublic  Boolean   @default(true)
+  user      User      @relation(fields: [userId], references: [id])
+  comments  Comment[]
+  likes     Like[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  // Relations for replies and likes
+  parentId String? // To allow replies to comments
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies  Comment[] @relation("CommentReplies")
+
+  user   User   @relation(fields: [userId], references: [id])
+  post   Post?  @relation(fields: [postId], references: [id])
+  likes  Like[] @relation("CommentLikes")
+  Reel   Reel?  @relation(fields: [reelId], references: [id])
+  reelId Int?
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String
+  postId    String?
+  commentId String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id])
+  post    Post?    @relation(fields: [postId], references: [id])
+  comment Comment? @relation("CommentLikes", fields: [commentId], references: [id])
+  Reel    Reel?    @relation(fields: [reelId], references: [id])
+  reelId  Int?
+}
+
+model Follow {
+  id         String       @id @default(uuid())
+  followerId String
+  followedId String
+  createdAt  DateTime     @default(now())
+  status     FollowStatus @default(PENDING) // Add this line
+
+  follower User @relation("UserFollowers", fields: [followerId], references: [id])
+  followed User @relation("UserFollowing", fields: [followedId], references: [id])
+}
+
+enum FollowStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  senderId  String
+  type      String   // 'FOLLOW', 'COMMENT', 'LIKE', etc.
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user    User @relation(fields: [userId], references: [id], name: "UserNotification") // Relation with user who received the notification
+  sender  User @relation(fields: [senderId], references: [id], name: "SenderNotification") // Relation with user who triggered the notification
+}
+
+enum NotificationType {
+  LIKE
+  COMMENT
+  FOLLOW
+  MENTION
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String
+  mediaUrl       String?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  sender       User         @relation("UserSentMessages", fields: [senderId], references: [id])
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  user1Id   String
+  user2Id   String
+  createdAt DateTime @default(now())
+
+  user1    User      @relation("User1Conversations", fields: [user1Id], references: [id])
+  user2    User      @relation("User2Conversations", fields: [user2Id], references: [id])
+  messages Message[]
+}
+
+model Media {
+  id        String    @id @default(uuid())
+  userId    String
+  url       String
+  type      MediaType
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+}
